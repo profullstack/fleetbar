@@ -1,0 +1,35 @@
+{
+  "name": "@profullstack/fleetbar",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "One fleet monitoring panel for every Profullstack site: a dependency-free <fleet-bar> web component (SSH login, HTTP, keyword, SSL and TCP checks run 24/7 by crawlproof) plus a small server proxy to the crawlproof partner uptime API.",
+  "keywords": ["uptime", "monitoring", "ssh", "fleet", "web-component", "custom-element", "crawlproof", "logicsrc", "express", "nextjs"],
+  "repository": { "type": "git", "url": "git+https://github.com/profullstack/fleetbar.git" },
+  "homepage": "https://github.com/profullstack/fleetbar#readme",
+  "bugs": { "url": "https://github.com/profullstack/fleetbar/issues" },
+  "license": "MIT",
+  "author": "Profullstack, Inc.",
+  "exports": {
+    ".": { "types": "./index.d.ts", "import": "./src/index.js" },
+    "./server": { "types": "./server.d.ts", "import": "./src/server.js" },
+    "./element": { "types": "./index.d.ts", "import": "./src/element.js" },
+    "./logic": { "types": "./index.d.ts", "import": "./src/logic.js" },
+    "./dist/fleetbar.js": "./dist/fleetbar.js",
+    "./dist/fleetbar.mjs": "./dist/fleetbar.mjs",
+    "./package.json": "./package.json"
+  },
+  "unpkg": "./dist/fleetbar.js",
+  "jsdelivr": "./dist/fleetbar.js",
+  "files": ["src", "dist", "index.d.ts", "server.d.ts", "README.md", "LICENSE"],
+  "sideEffects": ["./src/index.js", "./dist/fleetbar.js", "./dist/fleetbar.mjs"],
+  "engines": { "node": ">=20" },
+  "packageManager": "pnpm@10.34.6",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node scripts/build.js && node --test",
+    "prepack": "node scripts/build.js"
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4"
+  }
+}
