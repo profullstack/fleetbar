@@ -1,7 +1,15 @@
 export interface FleetbarUser {
-  email: string;
+  /** Forwarded as X-Fleet-User-Email only when emailVerified is exactly `true`. */
+  email?: string;
   /** Must be exactly `true`: the host asserts it verified this address. */
-  emailVerified: boolean;
+  emailVerified?: boolean;
+  /**
+   * The CoinPay `sub` the host has bound to this user (Sign in with CoinPay /
+   * Connect CoinPay). Forwarded as X-Fleet-User-CoinPay-Sub; crawlproof maps it to
+   * the crawlproof user linked to that CoinPay account and it wins over the email.
+   * Never derive it from an email. Omit or null when the user has no CoinPay link.
+   */
+  coinpaySub?: string | null;
 }
 
 export interface FleetbarHandlerOptions {
@@ -28,6 +36,7 @@ export type FleetbarHandler = (request: Request, ctx?: any) => Promise<Response>
 export const DEFAULT_CRAWLPROOF_URL: string;
 export const DEFAULT_BASE_PATH: string;
 export const DEFAULT_MAX_BODY_BYTES: number;
+export const COINPAY_SUB_RE: RegExp;
 export const ROUTES: ReadonlyArray<{ pattern: RegExp; methods: string[] }>;
 
 export function createFleetbarHandler(opts: FleetbarHandlerOptions): FleetbarHandler;
