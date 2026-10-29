@@ -176,7 +176,7 @@ Events (bubble, composed):
 | `fleetbar:change` | `{ action: "create" \| "update" \| "delete" \| "settings", id?, monitor?, settings? }` |
 | `fleetbar:error` | the error: `{ status, error, message, signup_url? }` |
 
-Custom properties, set on `fleet-bar` or any ancestor:
+Custom properties, set on `fleet-bar` or any ancestor (`:root`, a wrapper; since 0.1.1 an ancestor works too):
 
 `--fleetbar-bg`, `--fleetbar-surface`, `--fleetbar-fg`, `--fleetbar-muted`, `--fleetbar-border`, `--fleetbar-accent`, `--fleetbar-accent-fg`, `--fleetbar-up`, `--fleetbar-down`, `--fleetbar-paused`, `--fleetbar-pending`, `--fleetbar-radius`, `--fleetbar-gap`, `--fleetbar-font` (default `inherit`), `--fleetbar-mono`.
 
