@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/fleetbar",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "One fleet monitoring panel for every Profullstack site: a dependency-free <fleet-bar> web component (SSH login, HTTP, keyword, SSL and TCP checks run 24/7 by crawlproof) plus a small server proxy to the crawlproof partner uptime API.",
   "keywords": ["uptime", "monitoring", "ssh", "fleet", "web-component", "custom-element", "crawlproof", "logicsrc", "express", "nextjs"],

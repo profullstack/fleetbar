@@ -127,7 +127,7 @@ export default function Page() {
 | Option | Default | |
 | --- | --- | --- |
 | `token` | required | Partner token string, or a function (sync or async) read per request. Missing at request time gives 503 `fleetbar_not_configured`. |
-| `getUser(request, ctx)` | required | Returns `{ email, emailVerified }` or `null`. `ctx` is `{ req, res }` under Express and Next's route context under Next. |
+| `getUser(request, ctx)` | required | Returns `{ email, emailVerified, coinpaySub? }` or `null`. `ctx` is `{ req, res }` under Express and Next's route context under Next. See [CoinPay identity](#coinpay-identity). |
 | `crawlproofUrl` | `https://crawlproof.com` | |
 | `basePath` | `/api/fleetbar` | Where the routes are mounted. |
 | `maxBodyBytes` | `32768` | Bigger bodies get 413. |
@@ -150,11 +150,31 @@ Routes, each mapped to `crawlproof /api/uptime/v1/...`:
 What the handler enforces:
 
 - Any other path is 404, any other method 405 (with `Allow`). Query strings are dropped. Ids are `[A-Za-z0-9_-]{1,64}`.
-- No session: 401 `unauthorized`. Email not verified (`emailVerified !== true`): 403 `email_unverified`.
+- No session: 401 `unauthorized`. Email not verified (`emailVerified !== true`) and no `coinpaySub`: 403 `email_unverified`. A malformed `coinpaySub` (not `[A-Za-z0-9._:-]{1,128}`): 403 `invalid_coinpay_sub`.
 - Writes (PUT, POST, PATCH, DELETE) must be same-origin: the `Origin` host must match the request host (or `X-Forwarded-Host`, or `allowedOrigins`); with no `Origin`, `Sec-Fetch-Site: same-origin` is required. Otherwise 403 `cross_origin`.
 - Bodies must be `application/json` (415), a JSON object (400 `invalid_json`), and at most `maxBodyBytes` (413). They are parsed and re-serialised before forwarding.
-- Only `Authorization: Bearer <token>`, `X-Fleet-User-Email`, `Accept` and `Content-Type` go upstream. Cookies and browser auth headers do not. Only the JSON body and status come back, with `Cache-Control: no-store`.
+- Only `Authorization: Bearer <token>`, `X-Fleet-User-Email` (verified emails only), `X-Fleet-User-CoinPay-Sub` (when given), `Accept` and `Content-Type` go upstream. Cookies and browser auth headers do not. Only the JSON body and status come back, with `Cache-Control: no-store`.
 - crawlproof's own 4xx answers pass through, so `404 { error: "no_crawlproof_account", signup_url }` reaches the panel. A 401 or 403 from crawlproof means the partner token is wrong, so it becomes 502 `partner_auth_failed`. 5xx, redirects and timeouts become 502.
+
+## CoinPay identity
+
+Since 0.2.0 `getUser` may also return `coinpaySub`: the CoinPay account id (`sub`) your app has bound to this user through Sign in with CoinPay or Connect CoinPay. It goes upstream as `X-Fleet-User-CoinPay-Sub`, and crawlproof uses it ahead of the email: the fleet is the one belonging to the crawlproof user linked to that CoinPay account (404 `no_crawlproof_account` when none is). A sub on its own is enough, so a user who signed up with CoinPay and has no verified email can still use the panel.
+
+```js
+getUser: async (request) => {
+  const user = await sessionUser(request);
+  if (!user) return null;
+  return {
+    email: user.email,
+    emailVerified: user.emailVerified === true,
+    // From YOUR identities table, bound by sub. Never look it up by email:
+    // CoinPay emails are unverified.
+    coinpaySub: user.coinpaySub ?? null,
+  };
+};
+```
+
+Return `coinpaySub` only from a binding you made by `sub`. An unverified email is never forwarded, with or without a sub.
 
 ## Element API
 

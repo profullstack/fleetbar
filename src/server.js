@@ -7,7 +7,8 @@
 // - only the listed paths and methods reach crawlproof; everything else is 404/405
 // - the partner token and the user's email header are set here, never by the browser,
 //   and nothing from the browser is forwarded except a re-serialised JSON body
-// - 401 with no session, 403 when the email is not verified
+// - 401 with no session, 403 when the email is not verified and there is no CoinPay sub
+// - a CoinPay sub from getUser goes up as X-Fleet-User-CoinPay-Sub and wins upstream
 // - non-GET requests from another origin are refused (403 cross_origin)
 // - request bodies over maxBodyBytes are refused (413)
 
@@ -17,6 +18,8 @@ export const DEFAULT_MAX_BODY_BYTES = 32 * 1024;
 const UPSTREAM_PREFIX = '/api/uptime/v1';
 const MAX_UPSTREAM_BYTES = 1024 * 1024;
 const ID = '[A-Za-z0-9_-]{1,64}';
+/** A CoinPay `sub`: a uuid today; anything header-safe and short is accepted. */
+export const COINPAY_SUB_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** Every route the bar may call, with its allowed methods. */
 export const ROUTES = [
@@ -126,7 +129,7 @@ async function readUpstream(res) {
  * @param {object} opts
  * @param {string} [opts.crawlproofUrl]
  * @param {string | (() => string | undefined | Promise<string | undefined>)} opts.token
- * @param {(request: Request, ctx?: any) => Promise<{ email: string, emailVerified: boolean } | null> | { email: string, emailVerified: boolean } | null} opts.getUser
+ * @param {(request: Request, ctx?: any) => Promise<{ email?: string, emailVerified?: boolean, coinpaySub?: string | null } | null> | { email?: string, emailVerified?: boolean, coinpaySub?: string | null } | null} opts.getUser
  * @param {string} [opts.basePath]
  * @param {number} [opts.maxBodyBytes]
  * @param {string[]} [opts.allowedOrigins]
@@ -183,18 +186,37 @@ export function createFleetbarHandler(opts = {}) {
     } catch {
       return json(500, { error: 'session_error', message: 'Could not read the session.' });
     }
-    if (!user || typeof user.email !== 'string' || !user.email.includes('@')) {
+    if (!user || typeof user !== 'object') {
       return json(401, { error: 'unauthorized', message: 'Sign in to manage your fleet.' });
     }
-    if (user.emailVerified !== true) {
+    // A CoinPay sub (the user's CoinPay account id, bound by the host to this user)
+    // identifies the user on its own: crawlproof maps it through its CoinPay
+    // identities, and it wins over the email. A host returns it only when its
+    // user has CoinPay linked, never derived from an email.
+    let coinpaySub = null;
+    if (user.coinpaySub !== undefined && user.coinpaySub !== null && user.coinpaySub !== '') {
+      if (typeof user.coinpaySub !== 'string' || !COINPAY_SUB_RE.test(user.coinpaySub)) {
+        return json(403, { error: 'invalid_coinpay_sub', message: 'That CoinPay account id cannot be used.' });
+      }
+      coinpaySub = user.coinpaySub;
+    }
+    const hasEmail = typeof user.email === 'string' && user.email.includes('@');
+    if (!hasEmail && !coinpaySub) {
+      return json(401, { error: 'unauthorized', message: 'Sign in to manage your fleet.' });
+    }
+    let email = null;
+    if (hasEmail && user.emailVerified === true) {
+      email = user.email.trim();
+      if (/[\r\n,\s]/.test(email) || email.length > 320) {
+        if (!coinpaySub) return json(403, { error: 'email_unverified', message: 'That email cannot be used.' });
+        email = null;
+      }
+    }
+    if (!email && !coinpaySub) {
       return json(403, {
         error: 'email_unverified',
         message: 'Verify your email address to manage your fleet.',
       });
-    }
-    const email = user.email.trim();
-    if (/[\r\n,\s]/.test(email) || email.length > 320) {
-      return json(403, { error: 'email_unverified', message: 'That email cannot be used.' });
     }
 
     const partnerToken = typeof token === 'function' ? await token() : token;
@@ -237,7 +259,8 @@ export function createFleetbarHandler(opts = {}) {
         method,
         headers: {
           authorization: `Bearer ${partnerToken}`,
-          'x-fleet-user-email': email,
+          ...(email ? { 'x-fleet-user-email': email } : {}),
+          ...(coinpaySub ? { 'x-fleet-user-coinpay-sub': coinpaySub } : {}),
           accept: 'application/json',
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         },

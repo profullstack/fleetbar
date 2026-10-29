@@ -137,6 +137,43 @@ test('401 without a session, 403 when the email is not verified', async () => {
   assert.equal(none.cp.calls.length + unverified.cp.calls.length + truthy.cp.calls.length, 0);
 });
 
+test('a CoinPay sub goes upstream as X-Fleet-User-CoinPay-Sub, with the verified email', async () => {
+  const { handler, cp } = handlerWith({ getUser: async () => ({ ...VERIFIED, coinpaySub: '5d79f032-aaaa-bbbb-cccc-0123456789ab' }) });
+  const res = await handler(req('/api/fleetbar/monitors'));
+  assert.equal(res.status, 200);
+  const h = cp.calls[0].headers;
+  assert.equal(h.get('x-fleet-user-coinpay-sub'), '5d79f032-aaaa-bbbb-cccc-0123456789ab');
+  assert.equal(h.get('x-fleet-user-email'), 'ann@example.com');
+});
+
+test('no coinpaySub: no sub header (0.1.x behaviour)', async () => {
+  const { handler, cp } = handlerWith();
+  await handler(req('/api/fleetbar/monitors'));
+  assert.equal(cp.calls[0].headers.get('x-fleet-user-coinpay-sub'), null);
+});
+
+test('a CoinPay sub alone is enough; an unverified email is never forwarded', async () => {
+  const { handler, cp } = handlerWith({ getUser: async () => ({ email: 'x@y.z', emailVerified: false, coinpaySub: 'sub-1' }) });
+  const res = await handler(req('/api/fleetbar/monitors'));
+  assert.equal(res.status, 200);
+  assert.equal(cp.calls[0].headers.get('x-fleet-user-coinpay-sub'), 'sub-1');
+  assert.equal(cp.calls[0].headers.get('x-fleet-user-email'), null);
+
+  const subOnly = handlerWith({ getUser: async () => ({ coinpaySub: 'sub-2' }) });
+  assert.equal((await subOnly.handler(req('/api/fleetbar/monitors'))).status, 200);
+  assert.equal(subOnly.cp.calls[0].headers.get('x-fleet-user-email'), null);
+});
+
+test('a malformed CoinPay sub is refused before anything goes upstream', async () => {
+  for (const coinpaySub of ['a\r\nx-evil: 1', 'a b', 'x'.repeat(129), 42]) {
+    const { handler, cp } = handlerWith({ getUser: async () => ({ ...VERIFIED, coinpaySub }) });
+    const res = await handler(req('/api/fleetbar/monitors'));
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).error, 'invalid_coinpay_sub');
+    assert.equal(cp.calls.length, 0);
+  }
+});
+
 test('getUser receives the request and the context', async () => {
   let seen;
   const { handler } = handlerWith({ getUser: (r, ctx) => ((seen = [r, ctx]), VERIFIED) });
